@@ -55,7 +55,7 @@ Resources:
       EphemeralStorage:
         Size: 10240        
       Code:
-        ImageUri: !Sub "${EcrUrl}:planAttributes"
+        ImageUri: !Sub "${EcrUrl}:landing"
       Role: !Ref LabRole
 
   RawLambda:
@@ -181,6 +181,9 @@ Resources:
 
   GlueCrawler:
     Type: AWS::Glue::Crawler
+    DependsOn:
+      - DeliveryBucket
+      - CleanedBucket 
     Properties:
       Name: DeliveryGlueCrawler
       Role: !Ref LabRole
