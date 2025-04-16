@@ -285,11 +285,11 @@ Resources:
                 "Parameters": {
                   "Name": "DeliveryGlueCrawler"
                 },
-                "Next": "ParallelAthenaQueries"
+                "Next": "WaitCrawler"
               },
               "WaitCrawler": {
                 "Type": "Wait",
-                "Seconds": 90,
+                "Seconds": 15,
                 "Next": "CheckCrawlerStatus"
               },
               "CheckCrawlerStatus": {
