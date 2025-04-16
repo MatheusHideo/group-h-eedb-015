@@ -6,6 +6,7 @@ This repository contains the code for the Data Engineering and BIG Data class fr
 
 - **Docker** 🐳
 - **Docker Compose V2**
+- **AWS CLI** (make sure you have it installed and configured) ☁️
 
 ## Getting Started 🎯
 
@@ -14,10 +15,17 @@ Follow the steps below to set up your project environment:
 ### 1. AWS Configuration ☁️
 
 - **Set Up AWS Credentials:**  
-  Make sure your AWS credentials are configured on your machine.
+  Ensure your AWS credentials are properly configured on your machine.
 
 - **Create an AWS ECR Repository:**  
   Create an AWS ECR repository and copy its URL for later use.
+
+- **Login to AWS ECR:**  
+  Run the following command to authenticate Docker to your AWS ECR repository. Replace `${your_aws_region}` and `${your_aws_id}` with your actual AWS region and account ID:
+
+  ```bash
+  aws ecr get-login-password --region ${your_aws_region} | docker login --username AWS --password-stdin ${your_aws_id}.dkr.ecr.us-east-1.amazonaws.com
+  ```
 
 ### 2. Environment Variables 📝
 
@@ -76,7 +84,10 @@ aws cloudformation deploy --template-file ./app/cloud_formation.yaml --stack-nam
 
 ### 7. Initiate the Step Function 🔄
 
-After deploying, navigate to the AWS Step Functions console and initiate the workflow steps as configured in your project.
+After deploying via CloudFormation, navigate to the AWS Step Functions console and initiate the workflow steps as configured in your project.
 
 ## Repository Structure 📁
 
+```
+
+```
