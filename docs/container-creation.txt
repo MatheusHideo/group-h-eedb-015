@@ -4,4 +4,4 @@
 4 - docker push <id>.dkr.ecr.us-east-1.amazonaws.com/projectintegrator:latest
 
 ##cloud_formation##
-5 - aws cloudformation deploy --template-file ./app/cloud_formation.yaml --stack-name ProjectIntegrator --parameter-overrides LabRole=arn:aws:iam::518588348991:role/LabRole --parameter-overrides EcrUrl=$AWS_ECR_URL --capabilities CAPABILITY_NAMED_IAM
+5 - aws cloudformation deploy --template-file ./app/cloud_formation.yaml --stack-name ProjectIntegrator --parameter-overrides LabRole=arn:aws:iam::13212312312:role/LabRole --parameter-overrides EcrUrl=$AWS_ECR_URL --capabilities CAPABILITY_NAMED_IAM
