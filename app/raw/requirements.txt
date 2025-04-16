@@ -1,0 +1,7 @@
+kagglehub
+pandas
+numpy
+jsonschema
+boto3
+botocore
+pyarrow

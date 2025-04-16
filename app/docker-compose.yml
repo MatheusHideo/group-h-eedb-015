@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  raw-landing:
+    build:
+      context: ./raw
+      dockerfile: landing_download_Dockerfile
+    image: "${AWS_ECR_URL}:landing"
+  raw-processing:
+    build:
+      context: ./raw
+      dockerfile: ./raw_processing_Dockerfile
+    image: "${AWS_ECR_URL}:raw"
+
+  trusted-zipcodes:
+    build:
+      context: ./trusted
+      dockerfile: ./trusted_zipcodes_Dockerfile
+    image: "${AWS_ECR_URL}:zipcode"
+
+  trusted-service-area:
+    build:
+      context: ./trusted
+      dockerfile: ./trusted_service_area_Dockerfile
+    image: "${AWS_ECR_URL}:serviceArea"
+  trusted-rate:
+    build:
+      context: ./trusted
+      dockerfile: ./trusted_rate_Dockerfile
+    image: "${AWS_ECR_URL}:rate"
+
+  trusted-plan-atributtes:
+    build:
+      context: ./trusted
+      dockerfile: ./trusted_plan_attributes_Dockerfile
+    image: "${AWS_ECR_URL}:planAttributes"
+
+  trusted-business-rules:
+    build:
+      context: ./trusted
+      dockerfile: ./trusted_business_rule_Dockerfile
+    image: "${AWS_ECR_URL}:businessRules"
+  
+  trusted-benefits:
+    build:
+      context: ./trusted
+      dockerfile: ./trusted_benefits_cost_sharing_Dockerfile
+    image: "${AWS_ECR_URL}:benefits"
+  
+  

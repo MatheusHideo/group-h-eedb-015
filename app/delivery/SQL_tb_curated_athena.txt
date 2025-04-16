@@ -1,0 +1,207 @@
+✅ Objetivo 1 - Como as taxas e benefícios do plano variam entre os estados?
+✅ 1. Tabela tb_gold_benefits_rates_by_state
+CREATE TABLE tb_gold_benefits_rates_by_state
+WITH (
+    format = 'PARQUET',
+    external_location = 's3://delivery-test-edb/tb_gold_benefits_rates_by_state/'
+)
+AS
+SELECT DISTINCT
+    r.PlanId AS StandardComponentId,
+    b.StateCode,
+    r.IndividualRate,
+    r.IndividualTobaccoRate,
+    b.BenefitName,
+    b.CopayInnTier1,
+    b.CoinsInnTier1,
+    pa.PlanMarketingName,
+    pa.MetalLevel,
+    pa.PlanType,
+    pa.BusinessYear,
+    pa.IssuerId,
+    pa.NetworkId
+FROM 
+    tb_silver_rate r
+INNER JOIN 
+    tb_silver_benefits_cost_sharing b
+    ON r.PlanId = b.StandardComponentId
+    AND r.StateCode = b.StateCode
+    AND r.BusinessYear = b.BusinessYear
+    AND r.SourceName = b.SourceName
+    AND r.VersionNum = b.VersionNum
+    AND r.IssuerId2 = b.IssuerId2
+    AND r.IssuerId = b.IssuerId
+INNER JOIN
+    tb_silver_plan_attributes pa
+    ON b.PlanId = pa.PlanId
+    AND r.BusinessYear = pa.BusinessYear
+    AND r.IssuerId = pa.IssuerId;
+
+
+✅ Objetivo 1 Resposta: 
+SELECT
+    StateCode,
+    ROUND(AVG(IndividualRate), 2) AS Avg_IndividualRate,
+    ROUND(AVG(IndividualTobaccoRate), 2) AS Avg_TobaccoRate,
+    COUNT(DISTINCT PlanId) AS PlanCount,
+    ARRAY_AGG(DISTINCT BenefitName) AS UniqueBenefits
+FROM
+    tb_gold_benefits_rates_by_state
+GROUP BY
+    StateCode
+ORDER BY
+    StateCode;
+
+
+
+✅ Objetivo 2: Como os benefícios do plano se relacionam com as taxas do plano?
+✅ 2. Tabela tb_gold_benefits_vs_rates
+CREATE TABLE tb_gold_benefits_vs_rates
+WITH (
+    format = 'PARQUET',
+    external_location = 's3://delivery-test-edb/tb_gold_benefits_vs_rates/'
+)
+AS
+SELECT DISTINCT
+    b.PlanId,
+    b.BenefitName,
+    b.CopayInnTier1,
+    b.CoinsInnTier1,
+    CAST(NULLIF(r.IndividualRate, 'nan') AS DECIMAL(8,2)) AS IndividualRate,
+    CAST(NULLIF(r.IndividualTobaccoRate, 'nan') AS DECIMAL(8,2)) AS IndividualTobaccoRate,
+    b.StandardComponentId,
+    b.StateCode,
+    b.BusinessYear,
+    b.IssuerId
+FROM
+    tb_silver_benefits_cost_sharing AS b
+INNER JOIN
+    tb_silver_rate AS r
+ON
+    b.StandardComponentId = r.PlanId AND
+    b.StateCode = r.StateCode AND
+    b.BusinessYear = r.BusinessYear AND
+    b.IssuerId = r.IssuerId;
+	
+	
+	
+✅ Objetivo 3: Como as taxas do plano variam por idade?
+✅ 3. Tabela tb_gold_rates_by_age
+CREATE TABLE tb_gold_rates_by_age 
+WITH (
+    format = 'PARQUET',
+    external_location = 's3://delivery-test-edb/tb_gold_rates_by_age/'
+)
+AS
+SELECT
+    PlanId,
+    Age,
+    StateCode,
+    BusinessYear,
+    IssuerId,
+    SourceName,
+    VersionNum,
+    IssuerId2,
+    CAST(AVG(CAST(NULLIF(IndividualRate, 'nan') AS DOUBLE)) AS DECIMAL(8,2)) AS AvgRate,
+    CAST(AVG(CAST(NULLIF(IndividualTobaccoRate, 'nan') AS DOUBLE)) AS DECIMAL(8,2)) AS AvgTobaccoRate
+FROM
+    tb_silver_rate
+GROUP BY
+    PlanId,
+    Age,
+    StateCode,
+    BusinessYear,
+    IssuerId,
+    SourceName,
+    VersionNum,
+    IssuerId2;
+
+	
+✅ Objetivo 3 Resposta: 
+SELECT DISTINCT
+    PlanId,
+    BusinessYear,
+    Age,
+    AvgRate
+FROM
+    tb_gold_rates_by_age;
+
+
+
+✅ Objetivo 4: Como os planos variam entre os provedores de rede de seguros? 	
+✅ 4. Tabela tb_gold_plan_network_comparison
+CREATE TABLE tb_gold_plan_network_comparison
+WITH (
+    format = 'PARQUET',
+    external_location = 's3://delivery-test-edb/tb_gold_plan_network_comparison/'
+)
+AS
+SELECT DISTINCT
+    pa.IssuerId,
+    pa.PlanId,
+    pa.PlanMarketingName,
+    pa.PlanType,
+    pa.MetalLevel,
+    pa.NetworkId,
+    sa.ServiceAreaName,
+    sa.ServiceAreaId,
+    pa.BusinessYear
+FROM
+    tb_silver_plan_attributes pa
+INNER JOIN
+    tb_silver_service_area sa
+ON
+    sa.IssuerId = CAST(pa.IssuerId AS BIGINT)
+    AND pa.StateCode = sa.StateCode
+    AND sa.BusinessYear = CAST(pa.BusinessYear AS BIGINT);
+	
+	
+	
+✅	Objetivo 5: Qual a progressão de preço dos planos por ano?
+✅ 5. Tabela tb_gold_yearly_price_progression
+CREATE TABLE tb_gold_yearly_price_progression
+WITH (
+    format = 'PARQUET',
+    external_location = 's3://delivery-test-edb/tb_gold_yearly_price_progression/'
+)
+AS
+SELECT
+    PlanId,
+    BusinessYear,
+    CAST(AVG(CAST(NULLIF(IndividualRate, 'nan') AS DOUBLE)) AS DECIMAL(8,2)) AS AvgYearlyRate
+FROM
+    tb_silver_rate
+GROUP BY
+    PlanId,
+    BusinessYear;
+
+
+
+✅	Tabela plan_detail:
+✅ 6. Tabela tb_gold_plan_detail
+CREATE TABLE tb_gold_plan_detail
+WITH (
+    format = 'PARQUET',
+    external_location = 's3://delivery-test-edb/tb_gold_plan_detail/'
+)
+AS
+SELECT DISTINCT
+    p.PlanId,
+    p.StandardComponentId,
+    b.BusinessYear,
+    p.PlanMarketingName,
+    p.PlanType,
+    p.MetalLevel,
+    b.EnrolleeContractRateDeterminationRule,
+    b.DependentMaximumAgRule,
+    p.IsHSAEligible,
+    p.HSAOrHRAEmployerContribution,
+    p.HSAOrHRAEmployerContributionAmount
+FROM
+    tb_silver_plan_attributes p
+INNER JOIN
+    tb_silver_business_rules b
+    ON p.StandardComponentId = b.StandardComponentId
+    AND p.StateCode = b.StateCode
+    AND p.BusinessYear = b.BusinessYear
+    AND p.IssuerId = b.IssuerId;

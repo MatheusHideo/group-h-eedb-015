@@ -1,0 +1,447 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation Template that creates:
+  - 3 S3 buckets (bronze, silver, gold)
+  - 1 Athena WorkGroup (delivery)
+  - 4 Lambda functions (landing, raw, trusted, delivery)
+  - 1 Step Functions state machine orchestrating the Lambdas
+  - 1 EC2 instance (t2.micro)
+  LabRole is necessary to create lambda functions.
+
+Parameters:
+  LabRole:
+    Description: ARN of the existing LabRole IAM role.
+    Type: String
+  EcrUrl:
+    Type: String
+    Description: "ECR url ex: 312312312.dkr.ecr.us-east-1.amazonaws.com/3123123::"
+
+
+
+# Mappings:
+#   AWSRegionToAMI:
+#     us-east-1:
+#       AMI: ami-0c55b159cbfafe1f0
+
+Resources:
+
+  LandingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: landing-test-edb
+
+  RawBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: raw-test-edb
+
+  CleanedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: cleaned-test-edb
+
+  DeliveryBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: delivery-test-edb
+
+  LandingLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: landing
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}:planAttributes"
+      Role: !Ref LabRole
+
+  RawLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: raw
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}:raw" 
+      Role: !Ref LabRole
+
+  TrustedLambdaBenefits:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: trustedBenefits
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}::benefits" 
+      Role: !Ref LabRole
+
+  TrustedLambdaZipCode:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: trustedZipCode
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}:zipcode" 
+      Role: !Ref LabRole
+
+  TrustedLambdaServiceArea:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: trustedServiceArea
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}:serviceArea" 
+      Role: !Ref LabRole
+
+  TrustedLambdaBusinessRules:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: trustedBusinessRules
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}:businessRules" 
+      Role: !Ref LabRole
+  
+  TrustedLambdaRate:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: trustedRate
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}:rate" 
+      Role: !Ref LabRole
+  
+  TrustedLambdaValidate:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: trustedValidate
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}:validate" 
+      Role: !Ref LabRole
+
+  TrustedLambdaPlanAttributes:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: trustedPlanAttributes
+      PackageType: Image
+      MemorySize: 10240
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240        
+      Code:
+        ImageUri: !Sub "${EcrUrl}:planAttributes" 
+      Role: !Ref LabRole
+
+
+  AthenaCrawler:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: athena_delivery_crawler
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          OutputLocation: "s3://delivery-test-edb"
+
+  AthenaDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: delivery_database
+
+
+  GlueCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: DeliveryGlueCrawler
+      Role: !Ref LabRole
+      DatabaseName: delivery_database
+      Targets:
+        S3Targets:
+          - Path: "s3://delivery-test-edb"
+          
+  StateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: ProjetoIntegradorStateMachine
+      RoleArn: !Ref LabRole
+      DefinitionString: !Sub 
+        - |
+          {
+            "Comment": "State Machine for sequential Lambda invocation",
+            "StartAt": "Landing",
+            "States": {
+              "Landing": {
+                "Type": "Task",
+                "Resource": "${LandingLambdaArn}",
+                "Next": "Raw"
+              },
+              "Raw": {
+                "Type": "Task",
+                "Resource": "${RawLambdaArn}",
+                "Next": "TrustedZipCode"
+              },
+              "TrustedZipCode": {
+                "Type": "Task",
+                "Resource": "${TrustedLambdaZipCodeArn}",
+                "Next": "TrustedParallel"
+              },
+              "TrustedParallel": {
+                "Type": "Parallel",
+                "Branches": [
+                  {
+                    "StartAt": "TrustedBenefits",
+                    "States": {
+                      "TrustedBenefits": {
+                        "Type": "Task",
+                        "Resource": "${TrustedLambdaBenefitsArn}",
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "TrustedService",
+                    "States": {
+                      "TrustedService": {
+                        "Type": "Task",
+                        "Resource": "${TrustedLambdaServiceAreaArn}",
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "TrustedRate",
+                    "States": {
+                      "TrustedRate": {
+                        "Type": "Task",
+                        "Resource": "${TrustedLambdaRateArn}",
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "TrustedBusinessRules",
+                    "States": {
+                      "TrustedBusinessRules": {
+                        "Type": "Task",
+                        "Resource": "${TrustedLambdaBusinessRulesArn}",
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "TrustedPlanAttributes",
+                    "States": {
+                      "TrustedPlanAttributes": {
+                        "Type": "Task",
+                        "Resource": "${TrustedLambdaPlanAttributesArn}",
+                        "End": true
+                      }
+                    }
+                  }
+                ],
+                "Next": "TrustedValidate"
+              },
+              "TrustedValidate": {
+                "Type": "Task",
+                "Resource": "${TrustedLambdaValidateArn}",
+                "Next": "StartGlueCrawler"
+              },
+              "StartGlueCrawler": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+                "Parameters": {
+                  "Name": "DeliveryGlueCrawler"
+                },
+                "Next": "ParallelAthenaQueries"
+              },
+              "WaitCrawler": {
+                "Type": "Wait",
+                "Seconds": 90,
+                "Next": "CheckCrawlerStatus"
+              },
+              "CheckCrawlerStatus": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler",
+                "Parameters": {
+                  "Name": "DeliveryGlueCrawler"
+                },
+                "Next": "CrawlerStatusChoice"
+              },
+              "CrawlerStatusChoice": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.Crawler.State",
+                    "StringEquals": "READY",
+                    "Next": "ParallelAthenaQueries"
+                  }
+                ],
+                "Default": "WaitCrawler"
+              },
+              "ParallelAthenaQueries": {
+                "Type": "Parallel",
+                "Branches": [
+                  {
+                    "StartAt": "QueryGoldBenefitsRatesByState",
+                    "States": {
+                      "QueryGoldBenefitsRatesByState": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+                        "Parameters": {
+                        "QueryString": "CREATE TABLE tb_gold_benefits_rates_by_state WITH (format = 'PARQUET', external_location = 's3://delivery-test-edb/tb_gold_benefits_rates_by_state/') AS SELECT DISTINCT r.PlanId AS StandardComponentId, b.StateCode, r.IndividualRate, r.IndividualTobaccoRate, b.BenefitName, b.CopayInnTier1, b.CoinsInnTier1, pa.PlanMarketingName, pa.MetalLevel, pa.PlanType, pa.BusinessYear, pa.IssuerId, pa.NetworkId FROM tb_gold_rate r INNER JOIN tb_gold_benefits_cost_sharing b ON r.PlanId = b.StandardComponentId AND r.StateCode = b.StateCode AND r.BusinessYear = b.BusinessYear AND r.SourceName = b.SourceName AND r.VersionNum = b.VersionNum AND r.IssuerId2 = b.IssuerId2 AND r.IssuerId = b.IssuerId INNER JOIN tb_gold_plan_attributes pa ON b.PlanId = pa.PlanId AND r.BusinessYear = pa.BusinessYear AND r.IssuerId = pa.IssuerId",
+                        "QueryExecutionContext": { "Database": "delivery_database" },
+                          "ResultConfiguration": { "OutputLocation": "s3://delivery-test-edb/" }
+                        },
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "QueryGoldBenefitsVsRates",
+                    "States": {
+                      "QueryGoldBenefitsVsRates": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+                        "Parameters": {
+                        "QueryString": "CREATE TABLE tb_gold_benefits_vs_rates WITH (format = 'PARQUET', external_location = 's3://delivery-test-edb/tb_gold_benefits_vs_rates/') AS SELECT DISTINCT b.PlanId, b.BenefitName, b.CopayInnTier1, b.CoinsInnTier1, CAST(NULLIF(r.IndividualRate, 'nan') AS DECIMAL(8,2)) AS IndividualRate, CAST(NULLIF(r.IndividualTobaccoRate, 'nan') AS DECIMAL(8,2)) AS IndividualTobaccoRate, b.StandardComponentId, b.StateCode, b.BusinessYear, b.IssuerId FROM tb_gold_benefits_cost_sharing AS b INNER JOIN tb_gold_rate AS r ON b.StandardComponentId = r.PlanId AND b.StateCode = r.StateCode AND b.BusinessYear = r.BusinessYear AND b.IssuerId = r.IssuerId",
+                        "QueryExecutionContext": { "Database": "delivery_database" },
+                          "ResultConfiguration": { "OutputLocation": "s3://delivery-test-edb/" }
+                        },
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "QueryGoldRatesByAge",
+                    "States": {
+                      "QueryGoldRatesByAge": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+                        "Parameters": {
+                        "QueryString": "CREATE TABLE tb_gold_rates_by_age WITH (format = 'PARQUET', external_location = 's3://delivery-test-edb/tb_gold_rates_by_age/') AS SELECT PlanId, Age, StateCode, BusinessYear, IssuerId, SourceName, VersionNum, IssuerId2, CAST(AVG(CAST(NULLIF(IndividualRate, 'nan') AS DOUBLE)) AS DECIMAL(8,2)) AS AvgRate, CAST(AVG(CAST(NULLIF(IndividualTobaccoRate, 'nan') AS DOUBLE)) AS DECIMAL(8,2)) AS AvgTobaccoRate FROM tb_gold_rate GROUP BY PlanId, Age, StateCode, BusinessYear, IssuerId, SourceName, VersionNum, IssuerId2",
+                        "QueryExecutionContext": { "Database": "delivery_database" },
+                          "ResultConfiguration": { "OutputLocation": "s3://delivery-test-edb/" }
+                        },
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "QueryGoldPlanNetworkComparison",
+                    "States": {
+                      "QueryGoldPlanNetworkComparison": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+                        "Parameters": {
+                        "QueryString": "CREATE TABLE tb_gold_plan_network_comparison WITH (format = 'PARQUET', external_location = 's3://delivery-test-edb/tb_gold_plan_network_comparison/') AS SELECT DISTINCT pa.IssuerId, pa.PlanId, pa.PlanMarketingName, pa.PlanType, pa.MetalLevel, pa.NetworkId, sa.ServiceAreaName, sa.ServiceAreaId, pa.BusinessYear FROM tb_gold_plan_attributes pa INNER JOIN tb_gold_service_area sa ON sa.IssuerId = CAST(pa.IssuerId AS BIGINT) AND pa.StateCode = sa.StateCode AND sa.BusinessYear = CAST(pa.BusinessYear AS BIGINT)",
+                        "QueryExecutionContext": { "Database": "delivery_database" },
+                          "ResultConfiguration": { "OutputLocation": "s3://delivery-test-edb/" }
+                        },
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "QueryGoldYearlyPriceProgression",
+                    "States": {
+                      "QueryGoldYearlyPriceProgression": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+                        "Parameters": {
+                        "QueryString": "CREATE TABLE tb_gold_yearly_price_progression WITH (format = 'PARQUET', external_location = 's3://delivery-test-edb/tb_gold_yearly_price_progression/') AS SELECT PlanId, BusinessYear, CAST(AVG(CAST(NULLIF(IndividualRate, 'nan') AS DOUBLE)) AS DECIMAL(8,2)) AS AvgYearlyRate FROM tb_gold_rate GROUP BY PlanId, BusinessYear",
+                        "QueryExecutionContext": { "Database": "delivery_database" },
+                          "ResultConfiguration": { "OutputLocation": "s3://delivery-test-edb/" }
+                        },
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "QueryGoldPlanDetail",
+                    "States": {
+                      "QueryGoldPlanDetail": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+                        "Parameters": {
+                        "QueryString": "CREATE TABLE tb_gold_plan_detail WITH (format = 'PARQUET', external_location = 's3://delivery-test-edb/tb_gold_plan_detail/') AS SELECT DISTINCT p.PlanId, p.StandardComponentId, b.BusinessYear, p.PlanMarketingName, p.PlanType, p.MetalLevel, b.EnrolleeContractRateDeterminationRule, b.DependentMaximumAgRule, p.IsHSAEligible, p.HSAOrHRAEmployerContribution, p.HSAOrHRAEmployerContributionAmount FROM tb_gold_plan_attributes p INNER JOIN tb_gold_business_rules b ON p.StandardComponentId = b.StandardComponentId AND p.StateCode = b.StateCode AND p.BusinessYear = b.BusinessYear AND p.IssuerId = b.IssuerId",
+                        "QueryExecutionContext": { "Database": "delivery_database" },
+                          "ResultConfiguration": { "OutputLocation": "s3://delivery-test-edb/" }
+                        },
+                        "End": true
+                      }
+                    }
+                  }
+                ],
+                "Next": "FinalState"
+              },
+              "FinalState": {
+              "Type": "Pass",
+              "End": true
+              }
+            }
+          }
+        - LandingLambdaArn: !GetAtt LandingLambda.Arn
+          RawLambdaArn: !GetAtt RawLambda.Arn
+          TrustedLambdaZipCodeArn: !GetAtt TrustedLambdaZipCode.Arn
+          TrustedLambdaBenefitsArn: !GetAtt TrustedLambdaBenefits.Arn
+          TrustedLambdaServiceAreaArn: !GetAtt TrustedLambdaServiceArea.Arn
+          TrustedLambdaRateArn: !GetAtt TrustedLambdaRate.Arn
+          TrustedLambdaBusinessRulesArn: !GetAtt TrustedLambdaBusinessRules.Arn
+          TrustedLambdaPlanAttributesArn: !GetAtt TrustedLambdaPlanAttributes.Arn
+          TrustedLambdaValidateArn: !GetAtt TrustedLambdaValidate.Arn
+
+  # EC2Instance:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     InstanceType: t2.micro
+  #     ImageId: !FindInMap [ AWSRegionToAMI, !Ref "AWS::Region", AMI ]
+
+Outputs:
+  LandingBucketName:
+    Description: "The name of the Landing bucket"
+    Value: !Ref LandingBucket
+  RawLambdaName:
+    Description: "The name of the Raw bucket"
+    Value: !Ref RawBucket
+  CleanedBucketName:
+    Description: "The name of the Cleaned bucket"
+    Value: !Ref CleanedBucket
+  DeliveryBucketArn:
+    Description: "The name of the Delivery bucket"
+    Value: !Ref DeliveryBucket
+  AthenaDatabase:
+    Description: "The Athena Database name"
+    Value: !Ref AthenaDatabase
+  # EC2InstanceId:
+  #   Description: "ID of the EC2 instance"
+  #   Value: !Ref EC2Instance
