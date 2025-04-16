@@ -47,4 +47,10 @@ services:
       dockerfile: ./trusted_benefits_cost_sharing_Dockerfile
     image: "${AWS_ECR_URL}:benefits"
   
+  trusted-validate:
+    build:
+      context: ./trusted
+      dockerfile: ./trusted_validate_Dockerfile
+    image: "${AWS_ECR_URL}:validate"
+  
   
